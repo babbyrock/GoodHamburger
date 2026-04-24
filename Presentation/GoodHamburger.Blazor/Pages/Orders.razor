@@ -1,0 +1,70 @@
+﻿@page "/orders"
+@inject OrderService OrderService
+@inject NavigationManager Navigation
+
+<section class="orders-section">
+    <div class="orders-header">
+        <h2 class="section-title">PEDIDOS</h2>
+        <button class="btn-primary" @onclick="NewOrder">+ Novo Pedido</button>
+    </div>
+
+    @if (orders is null)
+    {
+        <div class="loading">Carregando...</div>
+    }
+    else if (!orders.Any())
+    {
+        <div class="empty-state">
+            <p>Nenhum pedido encontrado.</p>
+            <button class="btn-primary" @onclick="NewOrder">Fazer primeiro pedido</button>
+        </div>
+    }
+    else
+    {
+        <div class="orders-grid">
+            @foreach (var order in orders)
+            {
+                <div class="order-card">
+                    <div class="order-card-header">
+                        <span class="order-id">#@order.Id</span>
+                        <span class="order-date">@order.CreatedAt.ToString("dd/MM/yyyy HH:mm")</span>
+                    </div>
+                    <div class="order-card-body">
+                        @foreach (var item in order.Items)
+                        {
+                            <p class="order-item">@item.ProductName — R$ @item.Price.ToString("F2")</p>
+                        }
+                    </div>
+                    <div class="order-card-footer">
+                        <div class="order-values">
+                            <span>Subtotal: <b>R$ @order.Subtotal.ToString("F2")</b></span>
+                            @if (order.DiscountPercentage > 0)
+                            {
+                                <span class="discount">Desconto (@((order.DiscountPercentage * 100).ToString("F0"))%): -R$ @order.DiscountAmount.ToString("F2")</span>
+                            }
+                            <span class="total">Total: <b>R$ @order.Total.ToString("F2")</b></span>
+                        </div>
+                        <button class="btn-danger" @onclick="() => Delete(order.Id)">Remover</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private List<OrderModel>? orders;
+
+    protected override async Task OnInitializedAsync()
+    {
+        orders = await OrderService.GetAllAsync();
+    }
+
+    private void NewOrder() => Navigation.NavigateTo("/new-order");
+
+    private async Task Delete(long id)
+    {
+        await OrderService.DeleteAsync(id);
+        orders = await OrderService.GetAllAsync();
+    }
+}

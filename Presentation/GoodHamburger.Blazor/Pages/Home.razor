@@ -1,0 +1,110 @@
+﻿@page "/"
+@inject ProductService ProductService
+@using System.Globalization
+
+<div class="hero">
+    <div class="hero-text">
+        <h1><span>Sabor de verdade</span> em cada mordida</h1>
+        <p>Burgers artesanais feitos com ingredientes frescos, prontos pra te conquistar.</p>
+        <a href="/new-order" class="btn-hero">Fazer Pedido</a>
+    </div>
+
+    <div class="hero-image">
+        <img src="https://images.unsplash.com/photo-1561758033-7e924f619b47?w=600&q=80" alt="Hambúrguer artesanal" />
+    </div>
+</div>
+
+<section class="menu-section">
+    <h2 class="section-title">Nosso Cardápio</h2>
+    <p class="section-subtitle">Escolha o seu favorito e monte seu pedido</p>
+
+    @if (products is null)
+    {
+        <div class="loading">Carregando...</div>
+    }
+    else if (!products.Any())
+    {
+        <div class="loading">Nenhum produto disponível.</div>
+    }
+    else
+    {
+        <div class="menu-grid">
+            @foreach (var product in products)
+            {
+                var item = GetCatalogItem(product.Id);
+
+                <article class="menu-card">
+                    <div class="menu-card-image">
+                        <img src="@item.Image" alt="@product.Name" loading="lazy" />
+                    </div>
+
+                    <div class="menu-card-body">
+                        <h3 class="menu-card-name">@product.Name</h3>
+                        <p class="menu-card-desc">@item.Description</p>
+
+                        <div class="menu-card-footer">
+                            <span class="menu-card-price">
+                                @product.Price.ToString("C", ptBr)
+                            </span>
+
+                            <a href="@($"/new-order?id={product.Id}")" class="btn-card">
+                                Pedir
+                            </a>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private static readonly CultureInfo ptBr = new("pt-BR");
+
+    private List<ProductModel>? products;
+
+    protected override async Task OnInitializedAsync()
+    {
+        products = await ProductService.GetAllAsync();
+    }
+
+    private CatalogItem GetCatalogItem(long id) =>
+        Catalog.TryGetValue(id, out var item)
+            ? item
+            : DefaultItem;
+
+    private static readonly Dictionary<long, CatalogItem> Catalog = new()
+    {
+        [1] = new(
+            "https://images.unsplash.com/photo-1550547660-d9450f859349?w=400&q=80",
+            "Pão macio, carne grelhada, queijo e salada fresca"
+        ),
+
+        [2] = new(
+            "https://images.unsplash.com/photo-1559067933-0293effe6133?w=400&q=80",
+            "X-Egg Bacon com carne suculenta, ovo, bacon crocante e queijo derretido"
+        ),
+
+        [3] = new(
+            "https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=400&q=80",
+            "Burger com bacon crocante, queijo derretido e molho especial"
+        ),
+
+        [4] = new(
+            "https://images.unsplash.com/photo-1576107232684-1279f390859f?w=400&q=80",
+            "Batata frita crocante por fora e macia por dentro"
+        ),
+
+        [5] = new(
+            "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400&q=80",
+            "Bebida gelada e refrescante para acompanhar"
+        )
+    };
+
+    private static readonly CatalogItem DefaultItem = new(
+        "https://images.unsplash.com/photo-1561758033-7e924f619b47?w=400&q=80",
+        "Produto especial da casa"
+    );
+
+    private sealed record CatalogItem(string Image, string Description);
+}

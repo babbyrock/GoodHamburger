@@ -1,0 +1,202 @@
+﻿@page "/new-order"
+
+@using Microsoft.AspNetCore.Components
+@inject ProductService ProductService
+@inject OrderService OrderService
+@inject NavigationManager Navigation
+
+<section class="new-order-section">
+    <h2 class="section-title">NOVO PEDIDO</h2>
+
+    @if (products is null)
+    {
+        <div class="loading">Carregando...</div>
+    }
+    else
+    {
+        <div class="new-order-grid">
+            <div class="product-selection">
+                <h3>Selecione os itens</h3>
+                <p class="selection-hint">Máximo 1 de cada categoria</p>
+
+                @foreach (var group in products.GroupBy(p => p.Type))
+                {
+                    <div class="product-group">
+                        <h4 class="group-title">@GetTag(group.Key)</h4>
+
+                        @foreach (var product in group)
+                        {
+                            <div class="product-option @(IsSelected(product.Id) ? "selected" : "")"
+                                 @onclick="() => Toggle(product)">
+                                <span class="product-option-name">@product.Name</span>
+                                <span class="product-option-price">R$ @product.Price.ToString("F2")</span>
+
+                                @if (IsSelected(product.Id))
+                                {
+                                    <span class="check">✓</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="order-summary">
+                <h3>Resumo</h3>
+
+                @if (!SelectedProducts.Any())
+                {
+                    <p class="empty-summary">Nenhum item selecionado</p>
+                }
+                else
+                {
+                    @foreach (var product in SelectedProducts)
+                    {
+                        <div class="summary-item">
+                            <span>@product.Name</span>
+                            <span>R$ @product.Price.ToString("F2")</span>
+                        </div>
+                    }
+
+                    <div class="summary-divider"></div>
+
+                    <div class="summary-subtotal">
+                        <span>Subtotal</span>
+                        <span>R$ @Subtotal.ToString("F2")</span>
+                    </div>
+
+                    @if (Discount > 0)
+                    {
+                        <div class="summary-discount">
+                            <span>Desconto (@((Discount * 100).ToString("F0"))%)</span>
+                            <span>-R$ @DiscountAmount.ToString("F2")</span>
+                        </div>
+                    }
+
+                    <div class="summary-total">
+                        <span>Total</span>
+                        <span>R$ @Total.ToString("F2")</span>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(error))
+                {
+                    <p class="error-message">@error</p>
+                }
+
+                <button class="btn-primary btn-full"
+                        @onclick="Submit"
+                        disabled="@(!SelectedProducts.Any())">
+                    Confirmar Pedido
+                </button>
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    private List<ProductModel>? products;
+    private readonly HashSet<long> selectedIds = [];
+    private string error = string.Empty;
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "id")]
+    public long? ProductId { get; set; }
+
+    private IEnumerable<ProductModel> SelectedProducts =>
+        products?.Where(p => selectedIds.Contains(p.Id)) ?? Enumerable.Empty<ProductModel>();
+
+    private decimal Subtotal =>
+        SelectedProducts.Sum(p => p.Price);
+
+    private decimal DiscountAmount =>
+        Subtotal * Discount;
+
+    private decimal Total =>
+        Subtotal - DiscountAmount;
+
+    private decimal Discount
+    {
+        get
+        {
+            var hasSandwich = SelectedProducts.Any(p => p.Type == ProductType.Sandwich);
+            var hasFries = SelectedProducts.Any(p => p.Type == ProductType.Fries);
+            var hasDrink = SelectedProducts.Any(p => p.Type == ProductType.Drink);
+
+            return (hasSandwich, hasFries, hasDrink) switch
+            {
+                (true, true, true) => 0.20m,
+                (true, false, true) => 0.15m,
+                (true, true, false) => 0.10m,
+                _ => 0m
+            };
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        products = await ProductService.GetAllAsync();
+
+        if (ProductId.HasValue)
+        {
+            var product = products.FirstOrDefault(p => p.Id == ProductId.Value);
+
+            if (product is not null)
+                selectedIds.Add(product.Id);
+        }
+    }
+
+    private void Toggle(ProductModel product)
+    {
+        error = string.Empty;
+
+        if (selectedIds.Contains(product.Id))
+        {
+            selectedIds.Remove(product.Id);
+            return;
+        }
+
+        var alreadySelectedType = SelectedProducts
+            .Any(p => p.Type == product.Type);
+
+        if (alreadySelectedType)
+        {
+            error = $"Já existe um item do tipo '{GetTag(product.Type)}' selecionado.";
+            return;
+        }
+
+        selectedIds.Add(product.Id);
+    }
+
+    private async Task Submit()
+    {
+        error = string.Empty;
+
+        var request = new CreateOrderModel
+        {
+            ProductIds = selectedIds.ToList()
+        };
+
+        var success = await OrderService.CreateAsync(request);
+
+        if (success)
+        {
+            Navigation.NavigateTo("/orders");
+            return;
+        }
+
+        error = "Erro ao criar pedido. Tente novamente.";
+    }
+
+    private bool IsSelected(long id) =>
+        selectedIds.Contains(id);
+
+    private static string GetTag(ProductType type) =>
+        type switch
+        {
+            ProductType.Sandwich => "Sanduíche",
+            ProductType.Fries => "Acompanhamento",
+            ProductType.Drink => "Bebida",
+            _ => string.Empty
+        };
+}
